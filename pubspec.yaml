@@ -1,0 +1,55 @@
+name: maqwati
+description: "تطبيق مقوتي (Maqwati) - النظام المحاسبي المبسط والمتكامل لإدارة مبيعات ومشتريات وحسابات بائعي القات (Offline-First)"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # إدارة الحالة (State Management)
+  flutter_riverpod: ^2.5.1
+
+  # قاعدة البيانات المحلية SQLite عبر Drift (Type-safe Reactive Persistence & ACID Transactions)
+  drift: ^2.18.0
+  sqlite3_flutter_libs: ^0.5.24
+  sqlite3: ^2.4.5
+  path_provider: ^2.1.3
+  path: ^1.9.0
+  crypto: ^3.0.7
+
+  # النسخ الاحتياطي السحابي إلى Google Drive وضغط البيانات (ZIP + Drive API v3)
+  google_sign_in: ^6.2.1
+  googleapis: ^13.1.0
+  http: ^1.2.1
+  archive: ^3.6.1
+
+  # التقارير والمشاركة (PDF + الطباعة + واتساب)
+  pdf: ^3.11.0
+  printing: ^5.13.1
+  share_plus: ^9.0.0
+  url_launcher: ^6.3.0
+  intl: 0.20.2
+
+  # الأمان المحلي والتنقل
+  local_auth: ^2.2.0
+  flutter_secure_storage: ^9.2.2
+  go_router: ^14.2.0
+
+  # أيقونات وخطوط
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  drift_dev: ^2.18.0
+  build_runner: ^2.4.11
+
+flutter:
+  uses-material-design: true
