@@ -1,43 +1,43 @@
-# مقوتي | Maqwati
+# متابعتي | Mutabaati
 
-**تطبيق محاسبي لإدارة المبيعات والمخزون والحسابات اليومية**
+**تطبيق عربي لإدارة المتابعة اليومية والمصاريف والمهام والمواعيد**
 
 **تطوير:** وهيب الكبودي | Wahib Al-Kaboudi  
-**المنصة:** Android  
-**التقنيات:** Flutter · Dart · Riverpod · Drift · SQLite
+**المنصة:** Android / Flutter  
+**التقنيات:** Flutter · Dart · Riverpod · Drift/SQLite · GoRouter
 
 ## نبذة عن المشروع
 
-مقوتي تطبيق محاسبي للأنشطة التجارية الصغيرة يهدف إلى تنظيم البيع والشراء والديون والمخزون والمصاريف عبر واجهة عربية تعمل بالاعتماد على بيانات محلية.
+متابعتي تطبيق عربي لإدارة جوانب مختلفة من الحياة اليومية، يجمع العادات والصلوات والمصاريف والمهام والمواعيد في مساحة واحدة مع تخزين محلي.
 
 ## الوظائف والمكونات الأساسية
 
-- المبيعات النقدية والآجلة وتسجيل الأصناف والكميات.
-- حسابات الموردين والزبائن ومتابعة الديون والتحصيلات.
-- إدارة المخزون والتالف والمرتجعات وتكلفة البضاعة المباعة.
-- المصاريف اليومية والملخصات والتقارير ومشاركة بعض المستندات.
-- التخزين المحلي والنسخ الاحتياطي والحماية المحلية.
+- متابعة العادات والصلوات وتخصيص بنود المتابعة.
+- تسجيل المصاريف وتصنيفها.
+- تنظيم المهام والمواعيد والتذكيرات.
+- تقارير دورية لعرض تقدم المستخدم.
+- إعدادات وحقول مخصصة وواجهات نسخ احتياطي.
 
 ## صور ومخططات المشروع
 
-![مقوتي - صور التطبيق](screenshots/00-gallery.png)
+![متابعتي - معرض الواجهات](screenshots/00-gallery-overview.png)
 
 ### بقية الواجهات
 
-- [01 home dashboard](screenshots/01-home-dashboard.png)
-- [02 backup security](screenshots/02-backup-security.png)
-- [03 recent operations](screenshots/03-recent-operations.png)
-- [04 work expense](screenshots/04-work-expense.png)
-- [05 suppliers](screenshots/05-suppliers.png)
-- [06 add supplier](screenshots/06-add-supplier.png)
-- [07 customers](screenshots/07-customers.png)
-- [08 add customer](screenshots/08-add-customer.png)
-- [09 sales](screenshots/09-sales.png)
-- [10 wastage](screenshots/10-wastage.png)
+- [01 today](screenshots/01-today.png)
+- [02 today activities](screenshots/02-today-activities.png)
+- [03 prayer status](screenshots/03-prayer-status.png)
+- [04 settings](screenshots/04-settings.png)
+- [05 tracking](screenshots/05-tracking.png)
+- [06 tracking add](screenshots/06-tracking-add.png)
+- [07 expenses](screenshots/07-expenses.png)
+- [08 add expense](screenshots/08-add-expense.png)
+- [09 organizer](screenshots/09-organizer.png)
+- [10 reports](screenshots/10-reports.png)
 
 ## التقنيات المستخدمة
 
-Flutter · Dart · Riverpod · Drift · SQLite
+Flutter · Dart · Riverpod · Drift/SQLite · GoRouter
 
 ## التشغيل محليًا
 
@@ -48,7 +48,7 @@ flutter run
 
 ## حالة المشروع وحدوده
 
-الكود مصدر نسخة تطويرية؛ التحقق من النسخ السحابي والبصمة وإعداد توقيع إصدار الإنتاج يتطلب اختبارًا وتهيئة إضافية.
+بعض إعدادات تذكيرات الخلفية والنسخ الاحتياطي تحتاج تحققًا ميدانيًا على أجهزة مختلفة، ولا يُدّعى أنها مختبرة بالكامل.
 
 ## المطور وحقوق النشر
 

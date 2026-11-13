@@ -1,42 +1,68 @@
-# Flutter / Android / editor artifacts
+# Flutter / Dart
 .dart_tool/
-.flutter-plugins
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
-build/
-coverage/
+/build/
+/coverage/
+**/doc/api/
+
+# Android / Gradle / Kotlin
+.gradle/
+**/.gradle/
+**/.kotlin/
+android/local.properties
+**/local.properties
+**/key.properties
+*.jks
+*.keystore
+*.pfx
+*.pem
+*.key
+**/captures/
+
+# IDE / OS
 .idea/
 .vscode/
 *.iml
-**/.gradle/
-**/.kotlin/
-**/ephemeral/
-**/ios/Flutter/.last_build_id
+*.ipr
+*.iws
+.DS_Store
+Thumbs.db
+
+# Private data / runtime files
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
+*.bak
+*.backup
+*.log
+build-apk*.log
 *.apk
 *.aab
-# Local secrets, credentials and personal data
+
+# Debugging / test artifacts
+TestResults/
+*.trace
+
+
+# Local private files
 .env
 .env.*
 !.env.example
 *.jks
 *.keystore
-*.p12
 *.pfx
-*.pem
-*.key
-**/local.properties
-**/key.properties
-*.db
-*.db-wal
-*.db-shm
-*.sqlite
-*.sqlite3
-*.sqlite-wal
-*.sqlite-shm
-*.bak
-*.backup
-*.log
-*.tmp
-.DS_Store
-Thumbs.db
+key.properties
+local.properties
+*.apk
+*.aab
+__pycache__/
+.pytest_cache/
+.venv/

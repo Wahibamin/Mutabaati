@@ -1,391 +1,397 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
-import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_constants.dart';
-import '../../../core/providers/app_providers.dart';
-import '../../../core/utils/formatters.dart';
-import '../../../core/widgets/custom_numeric_keypad.dart';
-import '../../../data/local_db/app_database.dart';
-import '../../../domain/entities/models.dart';
+import '../../../app/providers.dart';
+import '../../../core/utils/local_date.dart';
+import '../../../core/utils/money.dart';
+import '../../custom_fields/presentation/custom_field_inputs.dart';
+import '../domain/expense_draft.dart';
 
-/// شاشة المصاريف وتقاريرها (صفحة 4 وصفحة 7 - TC-05):
-/// - تبويب 1: مصاريف العمل (أكياس، ثلج، ماء، إيجار، نقل/فرزة، عمال) وتُخصم من ربح العمل.
-/// - تبويب 2: مصاريف شخصية (مقاضي البيت، التزامات) وتُخصم من الصندوق النقدي مع فصلها في تقرير الأرباح.
-/// - تبويب 3: تقارير المصاريف (عرض ومقارنة مصاريف العمل والمصاريف الشخصية).
-class ExpensesScreen extends ConsumerStatefulWidget {
-  final int initialTabIndex;
-
-  const ExpensesScreen({super.key, this.initialTabIndex = 0});
+class ExpensesScreen extends ConsumerWidget {
+  const ExpensesScreen({super.key});
 
   @override
-  ConsumerState<ExpensesScreen> createState() => _ExpensesScreenState();
-}
-
-class _ExpensesScreenState extends ConsumerState<ExpensesScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  final _titleController = TextEditingController();
-  final _notesController = TextEditingController();
-  double _amount = 0;
-  String _paymentMethod = 'CASH';
-  bool _isSaving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(
-      length: 3,
-      vsync: this,
-      initialIndex: widget.initialTabIndex.clamp(0, 2),
-    );
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    _titleController.dispose();
-    _notesController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _saveExpense(String categoryType) async {
-    if (_isSaving) return;
-    if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('يرجى إدخال أو اختيار بند المصروف'),
-            backgroundColor: AppColors.debtRed),
-      );
-      return;
-    }
-    if (_amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('يرجى إدخال مبلغ المصروف أكبر من صفر'),
-            backgroundColor: AppColors.debtRed),
-      );
-      return;
-    }
-
-    setState(() => _isSaving = true);
-    try {
-      await ref.read(appDatabaseProvider).recordExpense(
-            categoryType: categoryType,
-            title: _titleController.text.trim(),
-            amount: _amount,
-            paymentMethod: _paymentMethod,
-            notes: _notesController.text.trim(),
-          );
-      if (mounted) {
-        setState(() {
-          _titleController.clear();
-          _notesController.clear();
-          _amount = 0;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              categoryType == 'WORK'
-                  ? 'تم تسجيل مصروف العمل بنجاح'
-                  : 'تم تسجيل المصروف الشخصي بنجاح',
-            ),
-            backgroundColor: AppColors.cashGreen,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final expensesAsync = ref.watch(expensesStreamProvider);
-    final currency =
-        ref.watch(appSettingsStreamProvider).valueOrNull?.currency ?? 'ر.ي';
-
+  Widget build(BuildContext context, WidgetRef ref) {
+    final localDate = localDateKey();
+    final settings = ref.watch(appSettingsProvider).value;
+    final categories = ref.watch(expenseCategoriesProvider);
+    final expenses = ref.watch(expensesForDateProvider(localDate));
+    final fractionDigits = settings?.currencyFractionDigits ?? 2;
+    final currencyCode = settings?.currencyCode ?? 'SAR';
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('المصاريف وتقاريرها'),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          tabs: const [
-            Tab(text: 'مصاريف العمل'),
-            Tab(text: 'مصاريف شخصية'),
-            Tab(text: 'تقارير المصاريف'),
-          ],
-        ),
-      ),
-      body: expensesAsync.when(
+      body: categories.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('خطأ: $e')),
-        data: (allExpenses) {
-          final workList =
-              allExpenses.where((e) => e.categoryType == 'WORK').toList();
-          final personalList =
-              allExpenses.where((e) => e.categoryType == 'PERSONAL').toList();
-
-          return TabBarView(
-            controller: _tabController,
-            children: [
-              _buildExpenseEntryTab(
-                categoryType: 'WORK',
-                headerNote:
-                    'تُخصم مصاريف العمل (أكياس، ثلج، ماء، إيجار، نقل) من صافي ربح العمل اليومي.',
-                quickItems: AppConstants.commonWorkExpenses,
-                records: workList,
-                currency: currency,
-              ),
-              _buildExpenseEntryTab(
-                categoryType: 'PERSONAL',
-                headerNote:
-                    'تُخصم المصاريف الشخصية (مقاضي المنزل) من الصندوق وتُفصل عن أرباح القات.',
-                quickItems: AppConstants.commonPersonalExpenses,
-                records: personalList,
-                currency: currency,
-              ),
-              _buildExpensesReportTab(workList, personalList, currency),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildExpenseEntryTab({
-    required String categoryType,
-    required String headerNote,
-    required List<String> quickItems,
-    required List<ExpenseEntity> records,
-    required String currency,
-  }) {
-    final isWork = categoryType == 'WORK';
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isWork ? AppColors.cashGreenBg : AppColors.warningOrangeBg,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            headerNote,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: isWork ? AppColors.primaryGreen : AppColors.warningOrange,
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        error: (_, _) => const Center(child: Text('تعذر تحميل التصنيفات.')),
+        data: (categoryRows) => expenses.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (_, _) => const Center(child: Text('تعذر تحميل المصاريف.')),
+          data: (rows) {
+            final categoryNames = {
+              for (final category in categoryRows) category.id: category.name,
+            };
+            final total = rows.fold(0, (sum, row) => sum + row.amountMinor);
+            return ListView(
+              padding: const EdgeInsets.all(16),
               children: [
-                const Text(
-                  'اختيار سريع للبند:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          DateFormat.yMMMMEEEEd('ar').format(DateTime.now()),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'إجمالي المصروف: ${MoneyParser.formatMinorUnits(total, fractionDigits: fractionDigits)} $currencyCode',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (categoryRows.isEmpty)
+                  const _EmptyExpenses(
+                    message: 'أضف تصنيفًا أولًا، مثل الطعام أو المواصلات.',
+                  )
+                else if (rows.isEmpty)
+                  const _EmptyExpenses(
+                    message: 'لا توجد مصاريف مسجلة لهذا اليوم.',
+                  )
+                else
+                  ...rows.map(
+                    (row) => _ExpenseCard(
+                      expense: row,
+                      categoryName:
+                          categoryNames[row.categoryId] ?? 'تصنيف مؤرشف',
+                      fractionDigits: fractionDigits,
+                      onDelete: () => _confirmDelete(context, ref, row.id),
+                      onEdit: () => _showExpenseDialog(
+                        context,
+                        ref,
+                        fractionDigits,
+                        existing: row,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+      floatingActionButton: categories.value?.isEmpty ?? true
+          ? FloatingActionButton.extended(
+              onPressed: () => _showCategoryDialog(context, ref),
+              icon: const Icon(Icons.category_outlined),
+              label: const Text('إضافة تصنيف'),
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton(
+                  heroTag: 'fab_category',
+                  mini: true,
+                  onPressed: () => _showCategoryDialog(context, ref),
+                  tooltip: 'إضافة تصنيف',
+                  child: const Icon(Icons.category_outlined),
                 ),
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: quickItems.map((item) {
-                    return ActionChip(
-                      label: Text(item),
-                      onPressed: () =>
-                          setState(() => _titleController.text = item),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _titleController,
-                  decoration: const InputDecoration(
-                    labelText: 'بند / وصف المصروف',
-                    prefixIcon: Icon(Icons.description_outlined),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                InkWell(
-                  onTap: () async {
-                    final val = await CustomNumericKeypad.show(
-                      context,
-                      title: 'إدخال مبلغ المصروف',
-                      initialValue: _amount,
-                    );
-                    if (val != null) setState(() => _amount = val);
-                  },
-                  child: InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'المبلغ (اضغط لفتح لوحة الأرقام السريعة)',
-                      prefixIcon: Icon(Icons.attach_money),
-                    ),
-                    child: Text(
-                      _amount > 0
-                          ? AppFormatters.formatMoney(_amount,
-                              currency: currency)
-                          : 'اضغط لإدخال المبلغ',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: _amount > 0
-                            ? AppColors.primaryGreen
-                            : AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    const Text('طريقة الصرف:',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    ChoiceChip(
-                      label: const Text('نقد من الصندوق'),
-                      selected: _paymentMethod == 'CASH',
-                      onSelected: (_) =>
-                          setState(() => _paymentMethod = 'CASH'),
-                    ),
-                    ChoiceChip(
-                      label: const Text('حوالة / محفظة'),
-                      selected: _paymentMethod == 'TRANSFER',
-                      onSelected: (_) =>
-                          setState(() => _paymentMethod = 'TRANSFER'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isWork
-                        ? AppColors.primaryGreen
-                        : AppColors.warningOrange,
-                    minimumSize: const Size(double.infinity, 50),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                  ),
-                  onPressed:
-                      _isSaving ? null : () => _saveExpense(categoryType),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.save_outlined),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          isWork ? 'حفظ مصروف العمل' : 'حفظ المصروف الشخصي',
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ],
-                  ),
+                FloatingActionButton.extended(
+                  heroTag: 'fab_expense',
+                  onPressed: () =>
+                      _showExpenseDialog(context, ref, fractionDigits),
+                  icon: const Icon(Icons.add),
+                  label: const Text('إضافة مصروف'),
                 ),
               ],
             ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'سجل ${isWork ? 'مصاريف العمل' : 'المصاريف الشخصية'} (${records.length})',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        for (final exp in records)
-          Card(
-            child: ListTile(
-              title: Text(exp.title,
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(
-                '${exp.paymentMethod == 'CASH' ? 'نقد' : 'حوالة'} • ${AppFormatters.formatDateTime(exp.createdAt)}',
-              ),
-              trailing: Text(
-                AppFormatters.formatMoney(exp.amount, currency: currency),
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.debtRed,
-                    fontSize: 15),
-              ),
-            ),
-          ),
-      ],
     );
   }
 
-  Widget _buildExpensesReportTab(
-    List<ExpenseEntity> workList,
-    List<ExpenseEntity> personalList,
-    String currency,
-  ) {
-    final totalWork = workList.fold<double>(0, (sum, e) => sum + e.amount);
-    final totalPersonal =
-        personalList.fold<double>(0, (sum, e) => sum + e.amount);
-    final grandTotal = totalWork + totalPersonal;
-
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'مقارنة مصاريف العمل والمصاريف الشخصية',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 14),
-                _buildReportRow(
-                  'إجمالي مصاريف العمل (تُخصم من الربح):',
-                  AppFormatters.formatMoney(totalWork, currency: currency),
-                  AppColors.primaryGreen,
-                ),
-                const Divider(),
-                _buildReportRow(
-                  'إجمالي المصاريف الشخصية (مسحوبات منزلية):',
-                  AppFormatters.formatMoney(totalPersonal, currency: currency),
-                  AppColors.warningOrange,
-                ),
-                const Divider(),
-                _buildReportRow(
-                  'إجمالي المبالغ المصروفة من الصندوق:',
-                  AppFormatters.formatMoney(grandTotal, currency: currency),
-                  AppColors.debtRed,
-                ),
-              ],
-            ),
-          ),
+  Future<void> _showCategoryDialog(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('تصنيف جديد'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'اسم التصنيف'),
         ),
-      ],
-    );
-  }
-
-  Widget _buildReportRow(String label, String val, Color color) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-              child: Text(label,
-                  style: const TextStyle(fontWeight: FontWeight.w600))),
-          const SizedBox(width: 8),
-          Text(val,
-              style: TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 16, color: color)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('حفظ'),
+          ),
         ],
       ),
     );
+    controller.dispose();
+    if (result == null) return;
+    try {
+      await ref.read(expenseRepositoryProvider).addCategory(result);
+    } on FormatException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
   }
+
+  Future<void> _showExpenseDialog(
+    BuildContext context,
+    WidgetRef ref,
+    int fractionDigits, {
+    dynamic existing,
+  }) async {
+    final categories = ref.read(expenseCategoriesProvider).value ?? [];
+    if (categories.isEmpty) return;
+
+    // جلب تعريفات الحقول المخصصة للمصاريف
+    final customFieldDefs = await ref
+        .read(customFieldsRepositoryProvider)
+        .getDefinitions('expense');
+
+    // جلب القيم الموجودة إن كان تعديلاً
+    Map<String, dynamic> initialValueMap = {};
+    if (existing != null && customFieldDefs.isNotEmpty) {
+      final values = await ref
+          .read(customFieldsRepositoryProvider)
+          .getValuesForOwner(ownerType: 'expense', ownerId: existing.id as String);
+      initialValueMap = {for (final v in values) v.definitionId: v};
+    }
+
+    if (!context.mounted) return;
+
+    final amount = TextEditingController(
+      text: existing != null
+          ? MoneyParser.formatMinorUnits(
+              existing.amountMinor as int,
+              fractionDigits: fractionDigits,
+            )
+          : '',
+    );
+    final note = TextEditingController(text: existing?.note ?? '');
+    var categoryId = (existing?.categoryId as String?) ?? categories.first.id;
+    final formKey = GlobalKey<CustomFieldFormState>();
+
+    final draft = await showDialog<ExpenseDraft>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (_, setState) => AlertDialog(
+          title: Text(existing == null ? 'مصروف جديد' : 'تعديل المصروف'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: categoryId,
+                  decoration: const InputDecoration(labelText: 'التصنيف'),
+                  items: categories
+                      .map(
+                        (category) => DropdownMenuItem(
+                          value: category.id,
+                          child: Text(category.name),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => setState(() => categoryId = value!),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: amount,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(labelText: 'المبلغ *'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: note,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'ملاحظة (اختيارية)',
+                  ),
+                ),
+                if (customFieldDefs.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  CustomFieldForm(
+                    key: formKey,
+                    definitions: customFieldDefs,
+                    initialValues: {
+                      for (final e in initialValueMap.entries)
+                        e.key: e.value,
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () {
+                try {
+                  final amountMinor = MoneyParser.parseToMinorUnits(
+                    amount.text,
+                    fractionDigits: fractionDigits,
+                  );
+                  Navigator.pop(
+                    dialogContext,
+                    ExpenseDraft(
+                      id: existing?.id as String?,
+                      categoryId: categoryId,
+                      amountMinor: amountMinor,
+                      localDate: localDateKey(),
+                      note: note.text,
+                    ),
+                  );
+                } on FormatException catch (error) {
+                  ScaffoldMessenger.of(
+                    dialogContext,
+                  ).showSnackBar(SnackBar(content: Text(error.message)));
+                }
+              },
+              child: const Text('حفظ'),
+            ),
+          ],
+        ),
+      ),
+    );
+    amount.dispose();
+    note.dispose();
+    if (draft == null) return;
+
+    // حفظ المصروف
+    await ref.read(expenseRepositoryProvider).save(draft);
+    final savedId = draft.id ?? await _getLastInsertedExpenseId(ref);
+
+    // حفظ قيم الحقول المخصصة
+    if (customFieldDefs.isNotEmpty && savedId != null) {
+      final entries = formKey.currentState?.collectEntries() ?? [];
+      final repo = ref.read(customFieldsRepositoryProvider);
+      for (final entry in entries) {
+        if (entry.isEmpty && !entry.definition.isRequired) continue;
+        await repo.saveValue(
+          definitionId: entry.definition.id,
+          ownerType: 'expense',
+          ownerId: savedId,
+          valueText: entry.valueText,
+          valueInteger: entry.valueInteger,
+          valueBoolean: entry.valueBoolean,
+          valueDate: entry.valueDate,
+        );
+      }
+    }
+  }
+
+  /// يعيد آخر مصروف محفوظ لليوم الحالي (لتحديد ID عند الإنشاء الجديد).
+  Future<String?> _getLastInsertedExpenseId(WidgetRef ref) async {
+    final rows = await ref
+        .read(expenseRepositoryProvider)
+        .watchForLocalDate(localDateKey())
+        .first;
+    return rows.isNotEmpty ? rows.first.id : null;
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    String id,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('حذف المصروف؟'),
+        content: const Text('لا يمكن التراجع عن الحذف من هذه الشاشة.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await ref.read(expenseRepositoryProvider).delete(id);
+  }
+}
+
+// ─── بطاقة المصروف ─────────────────────────────────────────────────────────
+
+class _ExpenseCard extends StatelessWidget {
+  const _ExpenseCard({
+    required this.expense,
+    required this.categoryName,
+    required this.fractionDigits,
+    required this.onDelete,
+    required this.onEdit,
+  });
+
+  final dynamic expense;
+  final String categoryName;
+  final int fractionDigits;
+  final VoidCallback onDelete;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: ListTile(
+      title: Text(categoryName),
+      subtitle: (expense.note == null || (expense.note as String).isEmpty)
+          ? null
+          : Text(expense.note as String),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            MoneyParser.formatMinorUnits(
+              expense.amountMinor as int,
+              fractionDigits: fractionDigits,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 20),
+            tooltip: 'تعديل',
+            onPressed: onEdit,
+          ),
+        ],
+      ),
+      onLongPress: onDelete,
+    ),
+  );
+}
+
+class _EmptyExpenses extends StatelessWidget {
+  const _EmptyExpenses({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(24),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.receipt_long_outlined, size: 52),
+        const SizedBox(height: 12),
+        Text(message, textAlign: TextAlign.center),
+      ],
+    ),
+  );
 }
